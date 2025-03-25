@@ -18,7 +18,7 @@ SBUILD_EXTRA_REPOS=(
 #    "deb http://deb.debian.org/debian testing main"
 )
 SBUILD_EXTRA_PACKAGES=(
-    msmtp-mta
+    msmtp-mta  # By default emacs depends on exim4 as the MTA, which leads to conflicts when trying to install into the chroot.
     emacs-el/bookworm-backports
     emacs-nox/bookworm-backports
 #    texinfo-lib/testing
@@ -43,7 +43,7 @@ if [[ -e "${WORKDIR}" ]] ; then
   fail=1
 fi
 if [[ -e "/srv/chroot/${SBUILD_TARGET_DIR}" ]] ; then
-  echo /srv/chroot/${SBUILD_TARGET_DIR} is in the way. For assistance: run sbuild-destroychroot ${SBUILD_TARGET_DIR}
+  echo /srv/chroot/${SBUILD_TARGET_DIR} is in the way. For assistance: run sbuild-destroychroot ${SBUILD_TARGET_DIR}. And check /etc/sbuild/chroot/${SBUILD_TARGET_DIR}*.
   fail=1
 fi
 if [[ \$fail ]] ; then
@@ -57,13 +57,19 @@ dch --bpo "${DCH_COMMENT}"
 
 sudo sbuild-createchroot --chroot-prefix=${RELEASE}-backports ${RELEASE} /srv/chroot/${SBUILD_TARGET_DIR} http://deb.debian.org/debian
 EOF
-for REPO in "${SBUILD_EXTRA_REPOS[@]}"; do
+
+if [[ ${#SBUILD_EXTRA_PACKAGES[@]} > 0 ]]; then
+  for REPO in "${SBUILD_EXTRA_REPOS[@]}"; do
     cat <<EOF
 echo "echo '${REPO}' | cat >> /etc/apt/sources.list" | sudo sbuild-shell ${SBUILD_TARGET_DIR}
 EOF
-done
+  done
+
+  cat <<EOF
+echo "apt update && apt install -y ${SBUILD_EXTRA_PACKAGES[@]}" | sudo sbuild-shell ${SBUILD_TARGET_DIR}
+EOF
+fi
 
 cat <<EOF
-echo "apt update && apt install -y ${SBUILD_EXTRA_PACKAGES[@]}" | sudo sbuild-shell ${SBUILD_TARGET_DIR}
 sbuild --build-dep-resolver=aptitude --debbuildopts="-v${LAST_VERSION}"
 EOF
